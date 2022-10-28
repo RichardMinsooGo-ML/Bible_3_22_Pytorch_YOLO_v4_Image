@@ -17,7 +17,7 @@ from torch.autograd import Variable
 import torch.optim as optim
 from eval_mAP import evaluate_mAP
 
-from models.models import *
+from models.darknet2pytorch import *
 from config.train_config import parse_train_configs
 
 def main():
