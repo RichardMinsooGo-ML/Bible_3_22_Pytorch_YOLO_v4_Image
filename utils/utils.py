@@ -59,9 +59,9 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
     """ Compute the average precision, given the recall and precision curves.
     Source: https://github.com/rafaelpadilla/Object-Detection-Metrics.
     # Arguments
-        tp:    True positives (list).
-        conf:  Objectness value from 0-1 (list).
-        pred_cls: Predicted object classes (list).
+        tp        : True positives (list).
+        conf      : Objectness value from 0-1 (list).
+        pred_cls  : Predicted object classes (list).
         target_cls: True object classes (list).
     # Returns
         The average precision as computed in py-faster-rcnn.
