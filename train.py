@@ -18,64 +18,32 @@ import torch.optim as optim
 from eval_mAP import evaluate_mAP
 
 from models.models import *
-# from model.yolov3 import *
+from config.train_config import parse_train_configs
 
 def main():
-    parser = argparse.ArgumentParser()
-    # parser.add_argument('--pretrained_path', type=str, default="./checkpoints/Yolo_V3_coco.pth", help="if specified starts from checkpoint model")
-    parser.add_argument('--pretrained_path', type=str, default="checkpoints/yolov4.weights", help="if specified starts from checkpoint model")
-    parser.add_argument('--save_path', type=str, default="checkpoints/Yolo_V4_VOC_model.pth", help="if specified starts from checkpoint model")
+    # Get data configuration
+    configs = parse_train_configs()
     
-    parser.add_argument('--working-dir' , type=str, default='./', metavar='PATH', help='The ROOT working directory')
-    parser.add_argument('--num_epochs'  , type=int, default=4, help="number of epochs")
-    parser.add_argument('--batch_size'  , type=int, default=2, help="size of each image batch")
-    
-    parser.add_argument('--gradient_accumulations', type=int, default=2, help="number of gradient accums before step")
-    parser.add_argument('--img_size'    , type=int, default=416, help="size of each image dimension")
-    parser.add_argument('--model_def'   , type=str,   default="config/yolov4_VOC.cfg", help="path to model definition file")
-    parser.add_argument('--n_cpu', type=int, default=1, help="number of cpu threads to use during batch generation")
-    parser.add_argument('--evaluation_interval', type=int, default=2, help="interval evaluations on validation set")
-    parser.add_argument('--multiscale_training', default=True, help="allow for multi-scale training")
-    parser.add_argument('--checkpoint_freq', type=int, default=2, metavar='N', help='frequency of saving checkpoints (default: 2)')
-    # parser.add_argument('--data_config' , type=str,   default="config/custom.data", help="path to data config file")
-    parser.add_argument('--data_config' , type=str,   default="config/VOC.data", help="path to data config file")
-    # parser.add_argument('--data_config' , type=str,   default="config/coco.data", help="path to data config file")
-    parser.add_argument('--use_giou_loss', action='store_true', help='If true, use GIoU loss during training. If false, use MSE loss for training')
-    
-    configs = parser.parse_args()
-    print(configs)
+    print(configs.device)
 
-    configs.iou_thres  = 0.5
-    configs.conf_thres = 0.5
-    configs.nms_thres  = 0.5
-                
-    ############## Dataset, logs, Checkpoints dir ######################
-    
-    configs.ckpt_dir    = os.path.join(configs.working_dir, 'checkpoints')
-    configs.logs_dir    = os.path.join(configs.working_dir, 'logs')
-
-    if not os.path.isdir(configs.ckpt_dir):
-        os.makedirs(configs.ckpt_dir)
-    if not os.path.isdir(configs.logs_dir):
-        os.makedirs(configs.logs_dir)
-
-    ############## Hardware configurations #############################    
-    configs.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Initiate model
-    # Darknet(args.image_size, num_classes)
-    # model = Darknet(configs.img_size, num_classes=20).to(configs.device)
-    model = Darknet(cfgfile=configs.model_def, use_giou_loss = configs.use_giou_loss)
-    model = model.to(configs.device)
+    
+    model = Darknet(configs.model_def)
     # model.apply(weights_init_normal)
-    model.print_network()
+    # model.print_network()
+    model = model.to(configs.device)
     
     # Get data configuration
     data_config = parse_data_config(configs.data_config)
     train_path = data_config["train"]
     valid_path = data_config["valid"]
+    class_names = load_classes(data_config["names"])
     
+    print(configs.pretrained_path)
+    
+    assert os.path.isfile(configs.pretrained_path), "No file at {}".format(configs.pretrained_path)
+
     # If specified we start from checkpoint
-    
     if configs.pretrained_path:
         if configs.pretrained_path.endswith(".pth"):
             model.load_state_dict(torch.load(configs.pretrained_path))
@@ -83,7 +51,9 @@ def main():
         else:
             model.load_darknet_weights(configs.pretrained_path)
             print("Darknet weight loaded!")
-    class_names = load_classes(data_config["names"])
+    # torch.save(model.state_dict(), "checkpoints/Yolo_V3_coco.pth")
+    # torch.save(model.state_dict(), "checkpoints/Yolo_V3_coco_tiny.pth")
+    # sys.exit()
     
     optimizer = torch.optim.Adam(model.parameters())
 
@@ -97,9 +67,9 @@ def main():
         "loss_obj",
         "loss_cls",
         "cls_acc",
-        "recall50",
-        "recall75",
-        "precision",
+        # "recall50",
+        # "recall75",
+        # "precision",
         "conf_obj",
         "conf_noobj",
     ]
@@ -108,8 +78,9 @@ def main():
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.8)
     
     # Create dataloader
-    # dataset = ListDataset(train_path, augment=True, multiscale=configs.multiscale_training)
-    dataset = ListDataset(valid_path, augment=False, multiscale=False)
+    dataset = ListDataset(train_path, augment=True, multiscale=configs.multiscale_training)
+    # dataset = ListDataset(valid_path, augment=False, multiscale=False)
+    # dataset = ListDataset(valid_path, augment=True, multiscale=configs.multiscale_training)
 
     train_dataloader = DataLoader(
         dataset,
@@ -121,15 +92,15 @@ def main():
     )
 
     max_mAP = 0.0
+    start_time = time.time() 
     for epoch in range(0, configs.num_epochs, 1):
+        
+        num_iters_per_epoch = len(train_dataloader)
 
-        num_iters_per_epoch = len(train_dataloader)        
-
-        # print(num_iters_per_epoch)
+        print(num_iters_per_epoch)
 
         # switch to train mode
         model.train()
-        start_time = time.time()
         
         epoch_loss = 0
         # Training        
@@ -160,9 +131,6 @@ def main():
             img = Image.fromarray(data)
             img.save('my_img.png')
             img.show()
-
-            import sys
-            sys.exit()
             """
             
             # data_time.update(time.time() - start_time)
@@ -170,7 +138,7 @@ def main():
             global_step = num_iters_per_epoch * epoch + batch_idx + 1
             
             targets = Variable(targets.to(configs.device), requires_grad=False)
-            imgs = Variable(imgs.to(configs.device))
+            imgs    = Variable(imgs.to(configs.device))
 
             total_loss, outputs = model(imgs, targets)
             
@@ -190,8 +158,7 @@ def main():
             # ----------------
             #   Log progress
             # ----------------
-            """
-            if (batch_idx+1)%int((len(train_dataloader)/8)) == 0:
+            if (batch_idx+1) % int(len(train_dataloader)/3) == 0:
 
                 log_str = "\n---- [Epoch %d/%d, Batch %d/%d] ----\n" % ((epoch+1), configs.num_epochs, (batch_idx+1), len(train_dataloader))
 
@@ -225,47 +192,43 @@ def main():
                 print(log_str)
 
             # model.seen += imgs.size(0)
-        """
         crnt_epoch_loss = epoch_loss/num_iters_per_epoch
         
         torch.save(model.state_dict(), configs.save_path)
         # global_epoch += 1
         
         # print("Global_epoch :",global_epoch, "Current epoch loss : {:1.5f}".format(crnt_epoch_loss),'Saved at {}'.format(configs.save_path))
-        print(epoch+1,"epoch loss : {:1.5f}".format(crnt_epoch_loss),'Saved at {}'.format(configs.save_path))
+        print("Current epoch loss : {:1.5f}".format(crnt_epoch_loss),'Saved at {}'.format(configs.save_path))
         
+    # Evaulation
+    print("\n---- Evaluating Model ----")
+    # Evaluate the model on the validation set
+    precision, recall, AP, f1, ap_class = evaluate_mAP(model, valid_path, configs,
+        batch_size=configs.batch_size)
 
-        # Evaulation        
-        #-------------------------------------------------------------------------------------
-        """        
-        if (epoch+1)%8 == 0:
-            print("\n---- Evaluating Model ----")
-            # Evaluate the model on the validation set
-            precision, recall, AP, f1, ap_class = evaluate_mAP(model, valid_path, configs,
-                batch_size=4)
+    val_metrics_dict = {
+        'precision': precision.mean(),
+        'recall': recall.mean(),
+        'AP': AP.mean(),
+        'f1': f1.mean(),
+        'ap_class': ap_class.mean()
+    }
 
-            val_metrics_dict = {
-                'precision': precision.mean(),
-                'recall': recall.mean(),
-                'AP': AP.mean(),
-                'f1': f1.mean(),
-                'ap_class': ap_class.mean()
-            }
+    # Print class APs and mAP
+    ap_table = [["Index", "Class name", "AP"]]
+    for i, c in enumerate(ap_class):
+        ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
+    print(AsciiTable(ap_table).table)
+    print(f"---- mAP {AP.mean()}")
 
-            # Print class APs and mAP
-            ap_table = [["Index", "Class name", "AP"]]
-            for i, c in enumerate(ap_class):
-                ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
-            print(AsciiTable(ap_table).table)
-            print(f"---- mAP {AP.mean()}")
-
-            max_mAP = AP.mean()
-            #-------------------------------------------------------------------------------------
-        # Save checkpoint
-        if (epoch+1) % configs.checkpoint_freq == 0:
-            torch.save(model.state_dict(), configs.save_path)
-            print('save a checkpoint at {}'.format(configs.save_path))
-        """            
+    max_mAP = AP.mean()
+    #-------------------------------------------------------------------------------------
+    """
+    # Save checkpoint
+    if (epoch+1) % configs.checkpoint_freq == 0:
+        torch.save(model.state_dict(), configs.save_path)
+        print('save a checkpoint at {}'.format(configs.save_path))
+    """
             
 if __name__ == '__main__':
     main()
