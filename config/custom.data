@@ -1,4 +1,4 @@
-classes= 1
-train=dataset/custom/train.txt
-valid=dataset/custom/valid.txt
-names=dataset/custom/classes.names
+classes = 1
+train = dataset/custom/train.txt
+valid = dataset/custom/valid.txt
+names = dataset/custom/classes.names

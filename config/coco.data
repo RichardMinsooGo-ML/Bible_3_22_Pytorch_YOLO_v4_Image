@@ -1,6 +1,6 @@
-classes= 80
-train=dataset/COCO2017/train.txt
-valid=dataset/COCO2017/valid.txt
-names=dataset/COCO2017/coco.names
-backup=backup/
-eval=coco
+classes = 80
+train = dataset/COCO2017/train.txt
+valid = dataset/COCO2017/valid.txt
+names = dataset/COCO2017/coco.names
+backup = backup/
+eval= coco
