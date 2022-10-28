@@ -46,7 +46,6 @@ def parse_cfg(cfgfile):
     fp.close()
     return blocks
 
-
 def print_cfg(blocks):
     print('layer     filters    size              input                output')
     prev_width = 416
