@@ -1,4 +1,4 @@
-# Pytorch Yolov3 : image
+# Pytorch Yolov4 : image
 
 YOLOv3 and YOLOv3_tiny implementation in Pytorch, with support for training, transfer training, object tracking mAP and so on...
 Code was tested with following specs:
